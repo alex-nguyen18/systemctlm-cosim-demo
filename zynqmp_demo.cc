@@ -43,6 +43,7 @@ using namespace std;
 #include "iconnect.h"
 #include "tests/test-modules/memory.h"
 #include "debugdev.h"
+#include "acceldev.h"
 #include "demo-dma.h"
 #include "soc/xilinx/zynqmp/xilinx-zynqmp.h"
 
@@ -72,8 +73,11 @@ SC_MODULE(Top)
 	iconnect<NR_MASTERS, NR_DEVICES> bus;
 	xilinx_zynqmp zynq;
 	memory mem;
-	debugdev debug;
+	acceldev accel;
+	//debugdev debug;
 	demodma *dma[NR_DEMODMA];
+
+	iconnect<1,1> *mbus;
 
 	sc_signal<bool> rst, rst_n;
 
@@ -206,9 +210,11 @@ SC_MODULE(Top)
 		bus("bus"),
 		zynq("zynq", sk_descr),
 		mem("mem", sc_time(1, SC_NS), 64 * 1024),
-		debug("debug"),
+		accel("accel"),
+		//debug("debug"),
 		rst("rst"),
 		rst_n("rst_n"),
+		//mbus("mbus"),
 #ifdef HAVE_VERILOG
 		checker("checker", checker_config()),
 		irq_tmr("irq_tmr"),
@@ -316,9 +322,11 @@ SC_MODULE(Top)
 			dma[i] = new demodma(name);
 		}
 
+		//previously debug
 		bus.memmap(0xa0000000ULL, 0x100 - 1,
-				ADDRMODE_RELATIVE, -1, debug.socket);
-
+				ADDRMODE_RELATIVE, -1, accel.socket);
+//		bus.memmap(0xa0000000ULL, 0,
+//				ADDRMODE_RELATIVE, -1, debug.socket);
 		for (i = 0; i < (sizeof dma / sizeof dma[0]); i++) {
 			bus.memmap(0xa0010000ULL + 0x100 * i, 0x18 - 1,
 				ADDRMODE_RELATIVE, -1, dma[i]->tgt_socket);
@@ -346,6 +354,10 @@ SC_MODULE(Top)
 
 		bus.memmap(0x0LL, 0xffffffff - 1,
 				ADDRMODE_RELATIVE, -1, *(zynq.s_axi_hpc_fpd[0]));
+		mbus = new iconnect<1,1> ("membus");
+		//Add DMA access
+		mbus->memmap(0x0LL, 0x8000000 - 1, ADDRMODE_RELATIVE, -1, *(zynq.s_axi_hp_fpd[0]));
+		accel.master_socket.bind(*mbus->t_sk[0]);
 
 		zynq.s_axi_hpm_fpd[0]->bind(*(bus.t_sk[0]));
 
@@ -354,7 +366,8 @@ SC_MODULE(Top)
 			dma[i]->irq(zynq.pl2ps_irq[1 + i]);
 		}
 
-		debug.irq(zynq.pl2ps_irq[0]);
+		//debug.irq(zynq.pl2ps_irq[0]);
+		accel.irq(zynq.pl2ps_irq[0]);
 
 #ifdef HAVE_VERILOG
 		/* Slow clock to keep simulation fast.  */

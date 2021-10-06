@@ -35,7 +35,7 @@ HAVE_VERILOG=y
 HAVE_VERILOG_VERILATOR?=n
 HAVE_VERILOG_VCS=y
 else
-SYSTEMC ?= /usr/local/systemc-2.3.2/
+SYSTEMC ?= /usr/local/packages/systemc-2.3.2/
 SYSTEMC_INCLUDE ?=$(SYSTEMC)/include/
 SYSTEMC_LIBDIR ?= $(SYSTEMC)/lib-linux64
 # In case your TLM-2.0 installation is not bundled with
@@ -103,6 +103,7 @@ SC_OBJS += trace.o
 SC_OBJS += debugdev.o
 SC_OBJS += demo-dma.o
 SC_OBJS += xilinx-axidma.o
+SC_OBJS += acceldev.o
 
 LIBSOC_PATH=libsystemctlm-soc
 CPPFLAGS += -I $(LIBSOC_PATH)
@@ -185,7 +186,7 @@ VHDLAN_FLAGS += -sc_model apb_slave_dummy
 SYSCAN_ZYNQ_DEMO = zynq_demo.cc
 SYSCAN_ZYNQMP_DEMO = zynqmp_demo.cc
 SYSCAN_ZYNQMP_LMAC2_DEMO = zynqmp_lmac2_demo.cc
-SYSCAN_SCFILES += demo-dma.cc debugdev.cc remote-port-tlm.cc
+SYSCAN_SCFILES += demo-dma.cc debugdev.cc remote-port-tlm.cc acceldev.cc
 VCS_CFILES += remote-port-proto.c remote-port-sk.c safeio.c
 
 SYSCAN_FLAGS += -tlm2 -sysc=opt_if
