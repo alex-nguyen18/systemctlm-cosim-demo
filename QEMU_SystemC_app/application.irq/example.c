@@ -7,12 +7,16 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
+#include <stdint.h>
 
 #define READ_CMD  (0x0 << 31)
 #define WRITE_CMD (0x1 << 31)
 
 #define COMMAND_MASK 0x80000000
 #define SMUGGLE_ADDR 0x01000000
+
+#define INTYPE uint16_t
+#define OUTTYPE uint32_t
 
 int det_int = 0;
 
@@ -35,18 +39,23 @@ void initialise(int fd) {
   }
 }
 
-void gemm(int fd, int m, int n, int k) {
+void gemm(int fd, int m, int n, int k, INTYPE* A, INTYPE* B, OUTTYPE* C) {
   unsigned long result;
   ioctl(fd, WRITE_CMD + 4 + 0, &m);
   ioctl(fd, WRITE_CMD + 4 + 4, &n);
   ioctl(fd, WRITE_CMD + 4 + 8, &k);
 
+  write(fd,A,m*k*sizeof(INTYPE));
+  write(fd,B,k*n*sizeof(INTYPE));
+
   result = 1;
   ioctl(fd, WRITE_CMD + 0, &result); // start
   
   do {
-    ioctl(fd, READ_CMD + 0, &result); // start
+    ioctl(fd, READ_CMD + 0, &result); // check if finished
   } while (result == 0);
+
+  read(fd,C,m*n*sizeof(OUTTYPE));
 }
 
 
@@ -56,6 +65,14 @@ int main(int argc, char * argv[])
   struct sigaction action;
   int fd;
 
+  
+  int m = 2;
+  int n = 2;
+  int k = 2;
+  INTYPE A[4] = {1,2,3,4};
+  INTYPE B[4] = {5,6,7,8};
+  OUTTYPE C[4] = {0,0,0,0};
+
   //Ensure proper usage
   if(argc > 2)
   {
@@ -63,60 +80,17 @@ int main(int argc, char * argv[])
     return -1;
   }
 
-  // install signal handler
-  sigemptyset(&action.sa_mask);
-  sigaddset(&action.sa_mask, SIGIO);
-
-  action.sa_handler = sighandler;
-  action.sa_flags=0;
-
-  sigaction(SIGIO, &action, NULL);
-
   // open hardware device (driver)
   fd=open("/dev/fpga", O_RDWR);
-  if(fd < 0)
-  {
 
-      printf("Unable to open /dev/fpga.  Ensure it exists!\n");
-      return -1;
-  }
-  fcntl(fd, F_SETOWN, getpid());
-  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL)|O_ASYNC);
+  initialise(fd);
 
-  if(argc > 1) {
-    //Assign val
-    val = atol(argv[1]);
-
-    //Write to addr0
-    ioctl(fd, WRITE_CMD + 0, &val);
-
-  } else {
-
-    //Read hardware 
-    ioctl(fd, READ_CMD + 0, &result);
-
-    printf("The SystemC time is %lu ns\n", result);
-
-    ioctl(fd, READ_CMD + 4, &result);
-
-    printf("The SystemC clock is %lu\n", result);
-  }
-
-  // Read interrupt
-  ioctl(fd, READ_CMD + 3, &result);
-  printf("Interrupt is %lu\n", result);
-
-  // Trigger interrupt
-  val = 1;
-  ioctl(fd, WRITE_CMD + 3, &val);
-
-  //Wait for interrupt
-  while(!det_int) continue;
-
-  printf("Interrupt received\n");
-
+  gemm(fd,m,n,k,A,B,C);
   //In the end, close the device driver
   close(fd);
+
+  printf("C = %d %d %d %d\n",*C, *(C+1), *(C+2), *(C+3));
+  fflush(stdout);
 
   return 0;
 }
