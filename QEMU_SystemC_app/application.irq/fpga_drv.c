@@ -125,18 +125,28 @@ static int fpga_open1 (struct inode *inode, struct file *file) {
    //abuf = __get_free_pages(GFP_KERNEL, FPGA_ABORDER);
    //bbuf = __get_free_pages(GFP_KERNEL, FPGA_ABORDER); // lol error handlign
    //cbuf = __get_free_pages(GFP_KERNEL, FPGA_CORDER);
-//   struct device *dev = &fpga_dev->dev;
+//   struct device *dev = &fpga_dev->dev; 
+
    abuf = kmalloc(FPGA_ABSIZE,GFP_KERNEL| __GFP_NOFAIL);  
    bbuf = kmalloc(FPGA_ABSIZE,GFP_KERNEL| __GFP_NOFAIL);
    cbuf = kmalloc(FPGA_CSIZE,GFP_KERNEL| __GFP_NOFAIL);
    
    dmaabuf = dma_map_single(dev, &abuf, FPGA_ABSIZE, DMA_TO_DEVICE);
+   if(dma_mapping_error(dev,dmaabuf))
+	printk(KERN_WARNING "dmaabuf broke\n");
    dmabbuf = dma_map_single(dev, &bbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
+   
    dmacbuf = dma_map_single(dev, &cbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
+   
    #ifdef DEBUG
 	printk(KERN_INFO " dma abuf %lx bbuf %lx cbuf %lx", dmaabuf, dmabbuf, dmacbuf);
 	printk(KERN_INFO " abuf %lx bbuf %lx cbuf %lx", abuf, bbuf, cbuf);
    #endif
+
+   writel(dmaabuf,l.fpga_ptr+16+0);
+   writel(dmabbuf,l.fpga_ptr+16+4);
+   writel(dmacbuf,l.fpga_ptr+16+8);
+
    return 0;
 }
 

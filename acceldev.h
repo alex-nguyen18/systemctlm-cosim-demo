@@ -18,6 +18,8 @@ public:
 	INTYPE* A;
 	INTYPE* B;
 
+	int gemm_done;
+
 	int aptr, bptr, cptr;
 
 	tlm_utils::simple_target_socket<acceldev> socket;

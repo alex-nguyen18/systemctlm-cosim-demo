@@ -79,7 +79,9 @@ void acceldev::gemm(){
             }
         }
     }
-
+    printf("A %x %x %x %x\n",A[0],A[1],A[2],A[3]);
+    printf("B %x %x %x %x\n",B[0],B[1],B[2],B[3]);
+    printf("C %x %x %x %x\n",C[0],C[1],C[2],C[3]);
 }
 
 void acceldev::copy_to_dram(){
@@ -163,8 +165,6 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 	unsigned char *byt = trans.get_byte_enable_ptr();
 	unsigned int wid = trans.get_streaming_width();
 
-	printf("Acceldev b_transport addr %d, data %d, len %d\n", addr, *(uint32_t*)data,len);
-		fflush(stdout);
 
 	if (byt != 0) {
 		trans.set_response_status(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
@@ -186,13 +186,17 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 
 		switch (addr) {
 			case 0:
-				//TODO: something sc_event?	 
+				v = gemm_done;
 				break;
 			default:
 				break;
 		}
 		memcpy(data, &v, len);
+		printf("Acceldev READ addr %x, data %x, len %d\n", addr, *(uint32_t*)data,len);
+		fflush(stdout);
 	} else if (cmd == tlm::TLM_WRITE_COMMAND) {
+		printf("Acceldev WRITE addr %x, data %x, len %d\n", addr, *(uint32_t*)data,len);
+		fflush(stdout);
 		static sc_time old_ts = SC_ZERO_TIME, now, diff;	
 
 		now = sc_time_stamp() + delay;
@@ -210,18 +214,23 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 				}else{
 					printf("That is not a valid HAL function!\n");
 				}*/
+				gemm_done = 0;
 				copy_from_dram();
 				gemm();
-				copy_to_dram();
+				copy_to_dram();	
+				gemm_done = 1;
 				break;
 			case 0x4:
 				M = *(uint32_t *)data;
 				break;
 			case 0x8:
 				N = *(uint32_t *)data;
+				ldb = N;
+				ldc = N;
 				break;
 			case 0xc:
 				K = *(uint32_t *)data;
+				lda = K;
 				break;
 			case 0x10:
 				aptr = *(uint32_t *)data;
