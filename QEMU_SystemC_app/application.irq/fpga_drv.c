@@ -65,8 +65,9 @@ module_param(install, int, S_IRUGO);
 int interruptcount = 0;
 
 static struct platform_device *fpga_dev = NULL;
+static struct device* dev = NULL;
 
-#define FPGA_ABSIZE (4 * 1024 * 1024 * sizeof(short))
+#define FPGA_ABSIZE (2 * 1024 * 1024 * sizeof(short))
 #define FPGA_ABORDER (23)
 #define FPGA_CSIZE  (1 * 1024 * 1024 * sizeof(int))
 #define FPGA_CORDER (22)
@@ -83,7 +84,7 @@ static struct fpga_drv_local {
   int irq;
   unsigned long mem_start;
   unsigned long mem_end;
-  volatile unsigned int *fpga_ptr;
+  volatile unsigned char *fpga_ptr;
   unsigned int offset;
   struct proc_dir_entry *fpga_interrupt_file;
   struct fasync_struct *fasync_fpga_queue ;
@@ -124,10 +125,18 @@ static int fpga_open1 (struct inode *inode, struct file *file) {
    //abuf = __get_free_pages(GFP_KERNEL, FPGA_ABORDER);
    //bbuf = __get_free_pages(GFP_KERNEL, FPGA_ABORDER); // lol error handlign
    //cbuf = __get_free_pages(GFP_KERNEL, FPGA_CORDER);
-   struct device *dev = &fpga_dev->dev;
+//   struct device *dev = &fpga_dev->dev;
+   abuf = kmalloc(FPGA_ABSIZE,GFP_KERNEL| __GFP_NOFAIL);  
+   bbuf = kmalloc(FPGA_ABSIZE,GFP_KERNEL| __GFP_NOFAIL);
+   cbuf = kmalloc(FPGA_CSIZE,GFP_KERNEL| __GFP_NOFAIL);
+   
    dmaabuf = dma_map_single(dev, &abuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    dmabbuf = dma_map_single(dev, &bbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    dmacbuf = dma_map_single(dev, &cbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
+   #ifdef DEBUG
+	printk(KERN_INFO " dma abuf %lx bbuf %lx cbuf %lx", dmaabuf, dmabbuf, dmacbuf);
+	printk(KERN_INFO " abuf %lx bbuf %lx cbuf %lx", abuf, bbuf, cbuf);
+   #endif
    return 0;
 }
 
@@ -135,10 +144,13 @@ static int fpga_release1 (struct inode *inode, struct file *file) {
    //free_pages(abuf, FPGA_ABORDER);
    //free_pages(bbuf, FPGA_ABORDER);
    //free_pages(cbuf, FPGA_CORDER);
-   struct device *dev = &fpga_dev->dev;
+//   struct device *dev = &fpga_dev->dev;
    dma_unmap_single(dev, dmaabuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    dma_unmap_single(dev, dmabbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    dma_unmap_single(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
+   kfree(abuf);
+   kfree(bbuf);
+   kfree(cbuf);
    return 0;
 }
 
@@ -154,7 +166,7 @@ static int fpga_fasync1 (int fd, struct file *filp, int on)
 static ssize_t fpga_write1(struct file *filp, const char __user *buf, size_t count, loff_t *offp)
 {
     int not_copied;
-    struct device *dev = &fpga_dev->dev;
+ //   struct device *dev = &fpga_dev->dev;
 
 #ifdef DEBUG
     printk(KERN_INFO "\nfpga_drv: receive write command to fpga \n");
@@ -179,7 +191,7 @@ static ssize_t fpga_write1(struct file *filp, const char __user *buf, size_t cou
 static ssize_t fpga_read1(struct file *filp, char __user *buf, size_t count, loff_t *offp)
 {
     int not_copied;
-    struct device *dev = &fpga_dev->dev;
+//    struct device *dev = &fpga_dev->dev;
 
 #ifdef DEBUG
     printk(KERN_INFO "\nfpga_drv: receive read command from fpga \n");
@@ -198,7 +210,7 @@ static long fpga_ioctl1(struct file *file, unsigned int cmd, unsigned long arg) 
    unsigned long value;
    unsigned int command_type;
    unsigned int offset;
-   volatile unsigned int *access_addr;
+   volatile unsigned char *access_addr;
 
 #ifdef DEBUG
    printk(KERN_INFO "\nfpga_drv: Inside fpga_ioctl1 \n");
@@ -333,7 +345,9 @@ static int fpga_drv_probe (struct platform_device *pdev)
 {
   struct resource *r_irq; /* Interrupt resources */
   struct resource *r_mem; /* IO mem resources */
-  struct device *dev = &pdev->dev;
+  //struct device *dev = &pdev->dev;
+  dev = &pdev->dev;
+
 
    int rv = -EBUSY;
 
@@ -364,7 +378,7 @@ static int fpga_drv_probe (struct platform_device *pdev)
       goto no_mem;
    }
 
-   l.fpga_ptr = (volatile unsigned int *)ioremap(l.mem_start, 
+   l.fpga_ptr = (volatile unsigned char *)ioremap(l.mem_start, 
                                                  l.mem_end - l.mem_start + 1);
    if (!l.fpga_ptr)
    {

@@ -48,15 +48,23 @@ void acceldev::copy_from_dram(){
 
 //	A
 //	trans.set_address(NEED TO TALK TO BRENDAN);
-	trans.set_data_ptr((unsigned char*)A);
-	trans.set_data_length(M*K*sizeof(INTYPE));
-	master_socket->b_transport(trans, delay);
+	for (int i = 0; i < M*K; i++){	
+		trans.set_data_ptr((unsigned char*)A+2*i);
+//		trans.set_data_length(M*K*sizeof(INTYPE));
+		trans.set_data_length(2);
+		trans.set_address(aptr+2*i);
+		master_socket->b_transport(trans, delay);
+	}
 	//wait for trans response?
 //	B
+	for (int i = 0; i < K*N; i++){	
+		trans.set_data_ptr((unsigned char*)B+2*i);
+//		trans.set_data_length(M*K*sizeof(INTYPE));
+		trans.set_data_length(2);
+		trans.set_address(bptr+2*i);
+		master_socket->b_transport(trans, delay);
+	}
 //	trans.set_address(NEED TO TALK TO BRENDAN);
-	trans.set_data_ptr((unsigned char*)B);
-	trans.set_data_length(K*N*sizeof(INTYPE));
-	master_socket->b_transport(trans, delay);
 	//wait for trans response?
 //	Reset C
 }
@@ -77,20 +85,22 @@ void acceldev::gemm(){
 void acceldev::copy_to_dram(){
 
 	//copy C to DRAM
-
  	tlm::tlm_generic_payload trans;
 	trans.set_command(tlm::TLM_WRITE_COMMAND);
-	trans.set_data_ptr((unsigned char*)C);
-	trans.set_data_length(M*N*sizeof(OUTTYPE));
+	trans.set_data_length(4);
 	trans.set_streaming_width(4);
 	trans.set_dmi_allowed(false);
 	trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+	
+	sc_time delay = sc_time(1, SC_NS);
 
-	sc_time delay = sc_time(1, SC_US);
-
-//	trans.set_address(NEED TO TALK TO BRENDAN);
-   	master_socket->b_transport(trans,delay);
-
+	for (int i = 0; i < M*N; i++){	
+		trans.set_data_ptr((unsigned char*)C+4*i);
+//		trans.set_data_length(M*K*sizeof(INTYPE));
+		trans.set_data_length(4);
+		trans.set_address(cptr+4*i);
+		master_socket->b_transport(trans, delay);
+	}
 
 }
 
@@ -98,15 +108,18 @@ void acceldev::test_dma(){
 
 	//copy C to DRAM
 
-	int buf[2] = {0xdeadbeef,0xbeef};
+	int buf[2] = {0xdead,0xbeef};
 
 	int buf_read[1] = {0x0};
 	
- 	tlm::tlm_generic_payload trans;
+ 	unsigned char en_ptr[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+	tlm::tlm_generic_payload trans;
 	trans.set_command(tlm::TLM_WRITE_COMMAND);
 	trans.set_data_ptr((unsigned char*)buf);
 	trans.set_data_length(8);
 	trans.set_streaming_width(4);
+	trans.set_byte_enable_ptr(en_ptr);
 	trans.set_dmi_allowed(false);
 	trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
@@ -140,6 +153,7 @@ void acceldev::test_dma(){
 	wait(sc_time(1,SC_US));
 	return;
 }
+
 void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 {
 	tlm::tlm_command cmd = trans.get_command();
@@ -168,9 +182,12 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 
 	if (trans.get_command() == tlm::TLM_READ_COMMAND) {
 		sc_time now = sc_time_stamp() + delay;
-		uint32_t v = 0;
+		uint32_t v = 1;
 
 		switch (addr) {
+			case 0:
+				//TODO: something sc_event?	 
+				break;
 			default:
 				break;
 		}
@@ -182,6 +199,7 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 		diff = now - old_ts;
 		switch (addr) {
 			case 0:
+				/*
 				if (*(uint32_t *)data == 1){
 					copy_from_dram();
 				}else if (*(uint32_t *)data == 2){
@@ -191,7 +209,10 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 					test_dma();
 				}else{
 					printf("That is not a valid HAL function!\n");
-				}
+				}*/
+				copy_from_dram();
+				gemm();
+				copy_to_dram();
 				break;
 			case 0x4:
 				M = *(uint32_t *)data;
@@ -203,13 +224,13 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 				K = *(uint32_t *)data;
 				break;
 			case 0x10:
-				lda = *(uint32_t *)data;
+				aptr = *(uint32_t *)data;
 				break;
 			case 0x14:
-				ldb = *(uint32_t *)data;
+				bptr = *(uint32_t *)data;
 				break;
 			case 0x18:
-				ldc = *(uint32_t *)data;
+				cptr = *(uint32_t *)data;
 				break;
 			default:
 				break;

@@ -34,12 +34,13 @@ void sighandler(int signo)
 void initialise(int fd) {
   unsigned long result;
   for (int i = 0; i < 3; ++i) {
-    ioctl(fd, SMUGGLE_ADDR + i, &result); // not a problem if it gets cut down since DRAM is in the low part of physical addr space
-    ioctl(fd, WRITE_CMD + 16 + 4 * i, &result);
+    //ioctl(fd, SMUGGLE_ADDR + i, &result); // not a problem if it gets cut down since DRAM is in the low part of physical addr space
+    //ioctl(fd, WRITE_CMD + 16 + 4 * i, &result);
+    //printf("%d \n",result);
   }
 }
 
-void gemm(int fd, int m, int n, int k, INTYPE* A, INTYPE* B, OUTTYPE* C) {
+void gemm(int fd, unsigned long m, unsigned long n, unsigned long k, INTYPE* A, INTYPE* B, OUTTYPE* C) {
   unsigned long result;
   ioctl(fd, WRITE_CMD + 4 + 0, &m);
   ioctl(fd, WRITE_CMD + 4 + 4, &n);
