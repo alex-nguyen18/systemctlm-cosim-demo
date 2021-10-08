@@ -356,7 +356,7 @@ SC_MODULE(Top)
 				ADDRMODE_RELATIVE, -1, *(zynq.s_axi_hpc_fpd[0]));
 		mbus = new iconnect<1,1> ("membus");
 		//Add DMA access
-		mbus->memmap(0x0LL, 0x8000000 - 1, ADDRMODE_RELATIVE, -1, *(zynq.s_axi_hp_fpd[0]));
+		mbus->memmap(0x0LL, 0x80000000 - 1, ADDRMODE_RELATIVE, -1, *(zynq.s_axi_hp_fpd[0]));
 		accel.master_socket.bind(*mbus->t_sk[0]);
 
 		zynq.s_axi_hpm_fpd[0]->bind(*(bus.t_sk[0]));

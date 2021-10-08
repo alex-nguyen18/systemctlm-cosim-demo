@@ -79,9 +79,9 @@ void acceldev::gemm(){
             }
         }
     }
-    printf("A %x %x %x %x\n",A[0],A[1],A[2],A[3]);
-    printf("B %x %x %x %x\n",B[0],B[1],B[2],B[3]);
-    printf("C %x %x %x %x\n",C[0],C[1],C[2],C[3]);
+    printf("A %d %d %d %d\n",A[0],A[1],A[2],A[3]);
+    printf("B %d %d %d %d\n",B[0],B[1],B[2],B[3]);
+    printf("C %d %d %d %d\n",C[0],C[1],C[2],C[3]);
 }
 
 void acceldev::copy_to_dram(){
@@ -222,24 +222,30 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 				break;
 			case 0x4:
 				M = *(uint32_t *)data;
+				printf("M = %d\n",M);
 				break;
 			case 0x8:
 				N = *(uint32_t *)data;
 				ldb = N;
 				ldc = N;
+				printf("N = %d\n",N);
 				break;
 			case 0xc:
 				K = *(uint32_t *)data;
 				lda = K;
+				printf("K = %d\n",K);
 				break;
 			case 0x10:
 				aptr = *(uint32_t *)data;
-				break;
-			case 0x14:
-				bptr = *(uint32_t *)data;
+				printf("aptr = %d\n",aptr);
 				break;
 			case 0x18:
+				bptr = *(uint32_t *)data;
+				printf("bptr = %d\n",bptr);
+				break;
+			case 0x20:
 				cptr = *(uint32_t *)data;
+				printf("cptr = %d\n",cptr);
 				break;
 			default:
 				break;

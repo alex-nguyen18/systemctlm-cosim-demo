@@ -20,7 +20,7 @@ public:
 
 	int gemm_done;
 
-	int aptr, bptr, cptr;
+	uint64_t aptr, bptr, cptr;
 
 	tlm_utils::simple_target_socket<acceldev> socket;
 	tlm_utils::simple_initiator_socket<acceldev> master_socket;	

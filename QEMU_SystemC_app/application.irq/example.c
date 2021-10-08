@@ -46,8 +46,10 @@ void gemm(int fd, unsigned long m, unsigned long n, unsigned long k, INTYPE* A, 
   ioctl(fd, WRITE_CMD + 4 + 4, &n);
   ioctl(fd, WRITE_CMD + 4 + 8, &k);
 
-  write(fd,A,m*k*sizeof(INTYPE));
-  write(fd,B,k*n*sizeof(INTYPE));
+  printf("wrote %d bytes to A\n", write(fd,A,m*k*sizeof(INTYPE)));
+  printf("wrote %d bytes to B\n", write(fd,B,k*n*sizeof(INTYPE)));
+  printf("wrote %d bytes to C\n", write(fd,C,m*n*sizeof(OUTTYPE)));
+  fflush(stdout); 
 
   result = 1;
   ioctl(fd, WRITE_CMD + 0, &result); // start
@@ -90,7 +92,7 @@ int main(int argc, char * argv[])
   //In the end, close the device driver
   close(fd);
 
-  printf("C = %d %d %d %d\n",*C, *(C+1), *(C+2), *(C+3));
+  printf("C = %d %d %d %d\n",C[0], C[1], C[2], C[3]);
   fflush(stdout);
 
   return 0;

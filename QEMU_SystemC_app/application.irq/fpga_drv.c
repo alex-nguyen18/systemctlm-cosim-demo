@@ -72,9 +72,9 @@ static struct device* dev = NULL;
 #define FPGA_CSIZE  (1 * 1024 * 1024 * sizeof(int))
 #define FPGA_CORDER (22)
 bool isa = true;
-unsigned long abuf;
-unsigned long bbuf;
-unsigned long cbuf;
+unsigned long abuf = 0;
+unsigned long bbuf = 0;
+unsigned long cbuf = 0;
 dma_addr_t dmaabuf;
 dma_addr_t dmabbuf;
 dma_addr_t dmacbuf;
@@ -127,16 +127,16 @@ static int fpga_open1 (struct inode *inode, struct file *file) {
    //cbuf = __get_free_pages(GFP_KERNEL, FPGA_CORDER);
 //   struct device *dev = &fpga_dev->dev; 
 
-   abuf = kmalloc(FPGA_ABSIZE,GFP_KERNEL| __GFP_NOFAIL);  
-   bbuf = kmalloc(FPGA_ABSIZE,GFP_KERNEL| __GFP_NOFAIL);
-   cbuf = kmalloc(FPGA_CSIZE,GFP_KERNEL| __GFP_NOFAIL);
+   abuf = kmalloc(FPGA_ABSIZE,GFP_DMA);  
+   bbuf = kmalloc(FPGA_ABSIZE,GFP_DMA);
+   cbuf = kmalloc(FPGA_CSIZE,GFP_DMA);
    
-   dmaabuf = dma_map_single(dev, &abuf, FPGA_ABSIZE, DMA_TO_DEVICE);
+   dmaabuf = dma_map_single(dev, abuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    if(dma_mapping_error(dev,dmaabuf))
 	printk(KERN_WARNING "dmaabuf broke\n");
-   dmabbuf = dma_map_single(dev, &bbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
+   dmabbuf = dma_map_single(dev, bbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    
-   dmacbuf = dma_map_single(dev, &cbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
+   dmacbuf = dma_map_single(dev, cbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
    
    #ifdef DEBUG
 	printk(KERN_INFO " dma abuf %lx bbuf %lx cbuf %lx", dmaabuf, dmabbuf, dmacbuf);
@@ -144,8 +144,8 @@ static int fpga_open1 (struct inode *inode, struct file *file) {
    #endif
 
    writel(dmaabuf,l.fpga_ptr+16+0);
-   writel(dmabbuf,l.fpga_ptr+16+4);
-   writel(dmacbuf,l.fpga_ptr+16+8);
+   writel(dmabbuf,l.fpga_ptr+16+8);
+   writel(dmacbuf,l.fpga_ptr+16+16);
 
    return 0;
 }
