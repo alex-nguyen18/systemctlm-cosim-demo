@@ -37,6 +37,7 @@ void acceldev::copy_from_dram(){
 	A = new INTYPE[M*K];
 	B = new INTYPE[K*N];
 	C = new OUTTYPE[M*N];
+	memset(C, 0, M*N*sizeof(OUTTYPE));
 
 	tlm::tlm_generic_payload trans;
 	trans.set_command(tlm::TLM_READ_COMMAND);

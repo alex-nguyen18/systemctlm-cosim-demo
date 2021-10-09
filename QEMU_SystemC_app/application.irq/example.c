@@ -48,7 +48,7 @@ void gemm(int fd, unsigned long m, unsigned long n, unsigned long k, INTYPE* A, 
 
   printf("wrote %d bytes to A\n", write(fd,A,m*k*sizeof(INTYPE)));
   printf("wrote %d bytes to B\n", write(fd,B,k*n*sizeof(INTYPE)));
-  printf("wrote %d bytes to C\n", write(fd,C,m*n*sizeof(OUTTYPE)));
+  //printf("wrote %d bytes to C\n", write(fd,C,m*n*sizeof(OUTTYPE)));
   fflush(stdout); 
 
   result = 1;
