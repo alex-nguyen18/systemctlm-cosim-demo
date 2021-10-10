@@ -18,7 +18,7 @@ public:
 	INTYPE* A;
 	INTYPE* B;
 
-	int gemm_done, init_gemm_done, block_num, block_copy_done, read_val;
+	int gemm_done, init_data_done, block_num, block_copy_done, read_val, block_num_c, block_write_done;
 
 	uint64_t aptr, bptr, cptr;
 
@@ -29,7 +29,7 @@ public:
 	virtual ~acceldev();
 	acceldev(sc_core::sc_module_name name);
 	//void start_of_simulation();
-	virtual void copy_from_dram(int read_val);	
+	virtual void copy_from_dram();	
 	virtual void copy_to_dram();
 	virtual void init_gemm_data();
 	virtual void gemm();

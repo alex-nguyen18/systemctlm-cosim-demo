@@ -11,10 +11,10 @@ using namespace std;
 #include "acceldev.h"
 #include <sys/types.h>
 #include <time.h>
-#include <inttypes.h>
 
 #define INTYPE int16_t
 #define FPGA_ABSIZE (2 * 1024 * 1024 * sizeof(INTYPE))
+#define FPGA_CSIZE  (4 * 1024 * 1024 * sizeof(INTYPE))
 
 acceldev::acceldev(sc_module_name name)
 	: sc_module(name), socket("socket"), master_socket("master_socket")
@@ -42,6 +42,9 @@ void acceldev::init_gemm_data(){
 	memset(C, 0, M*N*sizeof(OUTTYPE));
 
    block_num = 0;
+	block_num_c = 0;
+
+	printf("\nGEMM Initilialized!\n");
 
 }
 
@@ -62,8 +65,9 @@ void acceldev::copy_from_dram(){
 	//	A
 	//	i -- bytes being copied in each chunk 
    if(read_val == 1 || read_val == 3) {
-      bytes_copied = M*K*2-(block_num*FPGA_SIZE);
-   	i_max=min(FPGA_ABSIZE, total_bytes_array-bytes_copied);
+      bytes_copied = block_num*FPGA_ABSIZE;
+   	//i_max=min(FPGA_ABSIZE, total_bytes_array-bytes_copied);
+		i_max=FPGA_ABSIZE<(total_bytes_array-bytes_copied)?FPGA_ABSIZE:(total_bytes_array-bytes_copied);
    	for (int i=0; i<i_max; i+=2) {
    		trans.set_data_ptr((unsigned char*)A+i+(FPGA_ABSIZE*block_num));		
    		trans.set_data_length(2);
@@ -73,9 +77,10 @@ void acceldev::copy_from_dram(){
    }
 	// B
    if(read_val == 2 || read_val == 3) {
-      total_bytes_array = M*K*2;
-      bytes_copied = K*N*2-(block_num*FPGA_SIZE);
-   	i_max=min(FPGA_ABSIZE, total_bytes_array-bytes_copied);
+      total_bytes_array = N*K*2;
+      bytes_copied = block_num*FPGA_ABSIZE;
+   	//i_max=min(FPGA_ABSIZE, total_bytes_array-bytes_copied);
+		i_max=FPGA_ABSIZE<(total_bytes_array-bytes_copied)?FPGA_ABSIZE:(total_bytes_array-bytes_copied);
    	for (int i=0; i<i_max; i+=2) {
    		trans.set_data_ptr((unsigned char*)B+i+(FPGA_ABSIZE*block_num));		
    		trans.set_data_length(2);
@@ -83,33 +88,9 @@ void acceldev::copy_from_dram(){
    		master_socket->b_transport(trans, delay);			
    	}
    }
-
-/* All in one chunk code
-	for (int i = 0; i < M*K; i++){	
-		trans.set_data_ptr((unsigned char*)A+2*i);
-//		trans.set_data_length(M*K*sizeof(INTYPE));
-		trans.set_data_length(2);
-		trans.set_address(aptr+2*i);
-		master_socket->b_transport(trans, delay);
-	}
-	//wait for trans response?
-//	B
-	for (int i = 0; i < K*N; i++){	
-		trans.set_data_ptr((unsigned char*)B+2*i);
-//		trans.set_data_length(M*K*sizeof(INTYPE));
-		trans.set_data_length(2);
-		trans.set_address(bptr+2*i);
-		master_socket->b_transport(trans, delay);
-	}
-//	trans.set_address(NEED TO TALK TO BRENDAN);
-	//wait for trans response?
-//	Reset C
-*/
-
 }
 
 void acceldev::gemm(){
-
     for (int i = 0; i < M; ++i) {
         for (int k = 0; k < K; ++k) {
             OUTTYPE A_PART = A[i * lda + k];
@@ -124,25 +105,23 @@ void acceldev::gemm(){
 }
 
 void acceldev::copy_to_dram(){
-
-	//copy C to DRAM
+	//Copy Block of C to DRAM
  	tlm::tlm_generic_payload trans;
 	trans.set_command(tlm::TLM_WRITE_COMMAND);
-	trans.set_data_length(4);
 	trans.set_streaming_width(4);
 	trans.set_dmi_allowed(false);
 	trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 	
 	sc_time delay = sc_time(1, SC_NS);
-
-	for (int i = 0; i < M*N; i++){	
-		trans.set_data_ptr((unsigned char*)C+4*i);
-//		trans.set_data_length(M*K*sizeof(INTYPE));
-		trans.set_data_length(4);
-		trans.set_address(cptr+4*i);
+	int total_bytes_array=M*N*4;
+	int bytes_copied=block_num_c*FPGA_CSIZE;
+	int i_max=FPGA_CSIZE<(total_bytes_array-bytes_copied)?FPGA_CSIZE:(total_bytes_array-bytes_copied);
+	for (int i = 0; i < i_max; i+=4){	
+		trans.set_data_ptr((unsigned char*)C+i+(FPGA_CSIZE*block_num_c));
+		trans.set_data_length(4);		
+		trans.set_address(cptr+i+(FPGA_CSIZE*block_num_c));
 		master_socket->b_transport(trans, delay);
 	}
-
 }
 
 void acceldev::test_dma(){
@@ -228,10 +207,13 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 				v = gemm_done;
 				break;
 			case 0x28:
-				v = init_gemm_done;
+				v = init_data_done;
 				break;
 			case 0x2c:
 				v = block_copy_done;
+				break;
+			case 0x30:
+				v = block_write_done;
 				break;
 			default:
 				break;
@@ -262,7 +244,7 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 				gemm_done = 0;
 				//copy_from_dram();
 				gemm();
-				copy_to_dram();	
+				//copy_to_dram();	
 				gemm_done = 1;
 				break;
 			case 0x4:
@@ -300,9 +282,15 @@ void acceldev::b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 			case 0x2c:
             block_copy_done = 0;
             read_val = *(uint32_t *)data;
-            copy_from_dma();
+            copy_from_dram();
             block_num++;
             block_copy_done = 1;
+				break;
+			case 0x30:
+            block_write_done = 0;
+            copy_to_dram();
+            block_num_c++;
+            block_write_done = 1;
 				break;
 			default:
 				break;
