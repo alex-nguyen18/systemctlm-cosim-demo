@@ -634,8 +634,8 @@ int sc_main(int argc, char* argv[])
 		exit(EXIT_FAILURE);
 	}
 
-	trace_fp = sc_create_vcd_trace_file("trace");
-	trace(trace_fp, *top, top->name());
+	//trace_fp = sc_create_vcd_trace_file("trace");
+	//trace(trace_fp, *top, top->name());
 
 #if defined(HAVE_VERILOG_VERILATOR) && VM_TRACE
         Verilated::traceEverOn(true);
