@@ -14,7 +14,7 @@ using namespace std;
 
 #define INTYPE int16_t
 #define FPGA_ABSIZE (2 * 1024 * 1024 * sizeof(INTYPE))
-#define FPGA_CSIZE  (4 * 1024 * 1024 * sizeof(INTYPE))
+#define FPGA_CSIZE  (4 * 1024 * 1024 * sizeof(OUTTYPE))
 
 acceldev::acceldev(sc_module_name name)
 	: sc_module(name), socket("socket"), master_socket("master_socket")
@@ -72,7 +72,7 @@ void acceldev::copy_from_dram(){
    	for (int i=0; i<i_max; i+=2) {
    		trans.set_data_ptr((unsigned char*)A+i+(FPGA_ABSIZE*block_num));		
    		trans.set_data_length(2);
-   		trans.set_address(aptr+i+(FPGA_ABSIZE*block_num)); // TODO - is this right?
+   		trans.set_address(aptr+i); // TODO - is this right?
    		master_socket->b_transport(trans, delay);			
    	}
 		printf("Block %d of A copied!\n", block_num);
@@ -86,8 +86,8 @@ void acceldev::copy_from_dram(){
    	for (int i=0; i<i_max; i+=2) {
    		trans.set_data_ptr((unsigned char*)B+i+(FPGA_ABSIZE*block_num));		
    		trans.set_data_length(2);
-   		trans.set_address(bptr+i+(FPGA_ABSIZE*block_num)); // TODO - is this right?
-   		master_socket->b_transport(trans, delay);			
+   		trans.set_address(bptr+i); // TODO - is this right?
+   		master_socket->b_transport(trans, delay);
    	}	
 		printf("Block %d of B copied!\n", block_num);
    }
@@ -113,14 +113,14 @@ void acceldev::copy_to_dram(){
 	trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 	
 	sc_time delay = sc_time(1, SC_NS);
-	printf("Starting %d Block Write\n", block_num);	
+	//printf("Starting %d Block Write\n", block_num);	
 	int total_bytes_array=M*N*4;
 	int bytes_copied=block_num_c*FPGA_CSIZE;
 	int i_max=FPGA_CSIZE<(total_bytes_array-bytes_copied)?FPGA_CSIZE:(total_bytes_array-bytes_copied);
 	for (int i = 0; i < i_max; i+=4){	
 		trans.set_data_ptr((unsigned char*)C+i+(FPGA_CSIZE*block_num_c));
 		trans.set_data_length(4);		
-		trans.set_address(cptr+i+(FPGA_CSIZE*block_num_c));
+		trans.set_address(cptr+i);
 		master_socket->b_transport(trans, delay);
 	}
 	printf("Block %d of C written!\n", block_num_c);	

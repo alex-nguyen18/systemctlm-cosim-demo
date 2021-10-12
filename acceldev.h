@@ -18,9 +18,10 @@ public:
 	INTYPE* A;
 	INTYPE* B;
 
-	int gemm_done, init_data_done, block_num, block_copy_done, read_val, block_num_c, block_write_done;
+	int block_num, block_num_c;
 
 	uint64_t aptr, bptr, cptr;
+	uint32_t gemm_done, init_data_done, block_copy_done, block_write_done, read_val;
 
 	tlm_utils::simple_target_socket<acceldev> socket;
 	tlm_utils::simple_initiator_socket<acceldev> master_socket;	
