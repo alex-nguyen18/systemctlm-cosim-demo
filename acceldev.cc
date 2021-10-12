@@ -62,6 +62,7 @@ void acceldev::copy_from_dram(){
    int total_bytes_array = M*K*2;
    int i_max=0;
 
+	printf("Starting %d Block Copy\n", block_num);
 	//	A
 	//	i -- bytes being copied in each chunk 
    if(read_val == 1 || read_val == 3) {
@@ -74,7 +75,8 @@ void acceldev::copy_from_dram(){
    		trans.set_address(aptr+i+(FPGA_ABSIZE*block_num)); // TODO - is this right?
    		master_socket->b_transport(trans, delay);			
    	}
-   }
+		printf("Block %d of A copied!\n", block_num);
+	}
 	// B
    if(read_val == 2 || read_val == 3) {
       total_bytes_array = N*K*2;
@@ -86,7 +88,8 @@ void acceldev::copy_from_dram(){
    		trans.set_data_length(2);
    		trans.set_address(bptr+i+(FPGA_ABSIZE*block_num)); // TODO - is this right?
    		master_socket->b_transport(trans, delay);			
-   	}
+   	}	
+		printf("Block %d of B copied!\n", block_num);
    }
 }
 
@@ -99,9 +102,6 @@ void acceldev::gemm(){
             }
         }
     }
-    printf("A %d %d %d %d\n",A[0],A[1],A[2],A[3]);
-    printf("B %d %d %d %d\n",B[0],B[1],B[2],B[3]);
-    printf("C %d %d %d %d\n",C[0],C[1],C[2],C[3]);
 }
 
 void acceldev::copy_to_dram(){
@@ -113,6 +113,7 @@ void acceldev::copy_to_dram(){
 	trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 	
 	sc_time delay = sc_time(1, SC_NS);
+	printf("Starting %d Block Write\n", block_num);	
 	int total_bytes_array=M*N*4;
 	int bytes_copied=block_num_c*FPGA_CSIZE;
 	int i_max=FPGA_CSIZE<(total_bytes_array-bytes_copied)?FPGA_CSIZE:(total_bytes_array-bytes_copied);
@@ -122,6 +123,7 @@ void acceldev::copy_to_dram(){
 		trans.set_address(cptr+i+(FPGA_CSIZE*block_num_c));
 		master_socket->b_transport(trans, delay);
 	}
+	printf("Block %d of C written!\n", block_num_c);	
 }
 
 void acceldev::test_dma(){
