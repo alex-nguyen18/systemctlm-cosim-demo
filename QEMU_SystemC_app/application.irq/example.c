@@ -52,7 +52,13 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
   ioctl(fd, WRITE_CMD + 4 + 4, &N);
   ioctl(fd, WRITE_CMD + 4 + 8, &K);
 
+  //////// Write a_ptr, b_ptr, c_ptr
+  ioctl(fd, WRITE_CMD + 4 + 12, A);
+  ioctl(fd, WRITE_CMD + 4 + 20, B);
+  ioctl(fd, WRITE_CMD + 4 + 28, C);
+
   //////// Init the Accel to expect START of data block transfer
+  /* CCREM
   int start = 1;
   ioctl(fd, WRITE_CMD + 40, &start);
   // Wait for init to finish
@@ -60,9 +66,10 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
   do {
     ioctl(fd, READ_CMD + 40, &result); // check if finished
   } while (result == 0);
-  printf("\nAccelerator initilized!\n");
+  printf("\nAccelerator initilized!\n"); */
 
   //////// Write A, B
+  /* CCREM
   int total_bytes_array=M>N?M*K*2:K*N*2;         // Larger of A,B will determine number of writes
   int total_blocks=(total_bytes_array+(FPGA_ABSIZE-1))/FPGA_ABSIZE;  // Number of block writes
   int bytes_copied_a=0;                            // Tracking total bytes written
@@ -97,6 +104,7 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
     bytes_copied_b += b_bytes;
   }
   printf("\tIn %d blocks:\n\t\tWrote %d bytes in A\n\t\tWrote %d bytes in B\n", total_blocks, bytes_copied_a, bytes_copied_b);
+  */ 
 
   //////// Tell GEMM to Run and Wait for Finish
   result = 1;
@@ -106,6 +114,7 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
   } while (result == 0);
   
   //////// Read Result from DRAM block by block
+  /* CCREM
   total_bytes_array=M*N*4;
   //total_blocks=total_bytes_array/FPGA_CSIZE;
   total_blocks=(total_bytes_array+(FPGA_CSIZE-1))/FPGA_CSIZE;  // Number of block writes  
@@ -124,6 +133,7 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
 	 // Read
 	 read(fd,C+(k*FPGA_CSIZE),c_bytes);
   }
+  */
   close(fd);  
 
 }
