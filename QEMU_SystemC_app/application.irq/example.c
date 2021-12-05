@@ -49,20 +49,35 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
   //////// Write M, N, K
   unsigned long result;
   ioctl(fd, WRITE_CMD + 4 + 0, &M);
+
+  printf("We have written M!!\n");
+  fflush(stdout);
+
   ioctl(fd, WRITE_CMD + 4 + 4, &N);
+
+  printf("We have written N!!\n");
+  fflush(stdout);
+
   ioctl(fd, WRITE_CMD + 4 + 8, &K);
 
+  printf("We have written K!!\n");
+  fflush(stdout);
   if(write(fd, A, M*K*sizeof(INTYPE)) != M*K*sizeof(INTYPE)){
 	printf("did not copy A correctly!\n");
 	close(fd);
 	exit(-1);
   }
+
+  printf("We have written to A!!\n");
+  fflush(stdout);
   if(write(fd, B, K*N*sizeof(INTYPE)) != K*N*sizeof(INTYPE)){
 	printf("did not copy B correctly!\n");
 	close(fd);
 	exit(-1);
   }
 
+  printf("We have written to B!!\n");
+  fflush(stdout);
   //////// Write a_ptr, b_ptr, c_ptr
  // ioctl(fd, WRITE_CMD + 4 + 12, A);
  // ioctl(fd, WRITE_CMD + 4 + 20, B);
@@ -120,10 +135,17 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
   //////// Tell GEMM to Run and Wait for Finish
   result = 1;
   ioctl(fd, WRITE_CMD + 0, &result); // start
+
+  printf("We have started!!\n");
+  fflush(stdout);
   do {
     ioctl(fd, READ_CMD + 0, &result); // check if finished
+    printf("We are not finished with GEMM!!\n");
+    fflush(stdout);
   } while (result == 0);
   
+  printf("We have finihsed!\n");
+  fflush(stdout);
   //////// Read Result from DRAM block by block
   /* CCREM
   total_bytes_array=M*N*4;
@@ -151,21 +173,29 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
 	exit(-1);
   }  
 
+  printf("We have read from C!!\n");
+  fflush(stdout);
 }
 
 int main(int argc, char * argv[]) 
 {
   unsigned long val, result;
   struct sigaction action;
-  int fd;
+
+  printf("We gonna open fpga!!\n");
+  fflush(stdout);
 
    //////// Open FPGA as file
   fd=open("/dev/fpga", O_RDWR); 
+
 
   if (fd == -1){
 	printf("could not open /dev/fpga!!\n");
 	exit(-1);
   } 
+
+  printf("We have opened /dev/fpga!!\n");
+  fflush(stdout);
 
   initialise(fd);
 

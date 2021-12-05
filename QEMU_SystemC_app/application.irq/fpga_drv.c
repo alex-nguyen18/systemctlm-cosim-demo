@@ -103,7 +103,7 @@ static irqreturn_t fpga_int_handler(int irq, void *lp)
    interruptcount++;
 
 #ifdef DEBUG
-   printk(KERN_INFO "\nfpga_drv: Interrupt detected in kernel \n");
+   printk(KERN_ALERT "\nfpga_drv: Interrupt detected in kernel \n");
 #endif
 
    /* acknowledge/reset the interrupt */
@@ -130,23 +130,24 @@ static int fpga_open1 (struct inode *inode, struct file *file) {
    abuf = kmalloc(FPGA_ABSIZE,GFP_DMA);  
    bbuf = kmalloc(FPGA_ABSIZE,GFP_DMA);
    cbuf = kmalloc(FPGA_CSIZE,GFP_DMA);
+	printk(KERN_ALERT "allocated\n");
    
    dmaabuf = dma_map_single(dev, abuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    if(dma_mapping_error(dev,dmaabuf))
-	printk(KERN_WARNING "dmaabuf broke\n");
+	printk(KERN_ALERT "dmaabuf broke\n");
    dmabbuf = dma_map_single(dev, bbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    
    dmacbuf = dma_map_single(dev, cbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
    
    #ifdef DEBUG
-	printk(KERN_INFO " dma abuf %lx bbuf %lx cbuf %lx", dmaabuf, dmabbuf, dmacbuf);
-	printk(KERN_INFO " abuf %lx bbuf %lx cbuf %lx", abuf, bbuf, cbuf);
+	printk(KERN_ALERT " dma abuf %lx bbuf %lx cbuf %lx\n", dmaabuf, dmabbuf, dmacbuf);
+	printk(KERN_ALERT " abuf %lx bbuf %lx cbuf %lx fpga_ptr %lx\n", abuf, bbuf, cbuf, l.fpga_ptr); 
    #endif
 
    writel(dmaabuf,l.fpga_ptr+16+0);
    writel(dmabbuf,l.fpga_ptr+16+8);
    writel(dmacbuf,l.fpga_ptr+16+16);
-
+	printk(KERN_ALERT "set addresses\n");
    return 0;
 }
 
@@ -163,7 +164,7 @@ static int fpga_release1 (struct inode *inode, struct file *file) {
 static int fpga_fasync1 (int fd, struct file *filp, int on)
 {
 #ifdef DEBUG
-   printk(KERN_INFO "\nfpga_drv: Inside fpga_fasync \n");
+   printk(KERN_ALERT "\nfpga_drv: Inside fpga_fasync \n");
 #endif
    return fasync_helper(fd, filp, on, &l.fasync_fpga_queue);
 
@@ -175,7 +176,7 @@ static ssize_t fpga_write1(struct file *filp, const char __user *buf, size_t cou
  //   struct device *dev = &fpga_dev->dev;
 
 #ifdef DEBUG
-    printk(KERN_INFO "\nfpga_drv: receive write command to fpga \n");
+    printk(KERN_ALERT "\nfpga_drv: receive write command to fpga \n");
 #endif    
    if (isa) {
      dma_sync_single_for_cpu(dev, dmaabuf, FPGA_ABSIZE, DMA_TO_DEVICE);
@@ -200,7 +201,7 @@ static ssize_t fpga_read1(struct file *filp, char __user *buf, size_t count, lof
 //    struct device *dev = &fpga_dev->dev;
 
 #ifdef DEBUG
-    printk(KERN_INFO "\nfpga_drv: receive read command from fpga \n");
+    printk(KERN_ALERT "\nfpga_drv: receive read command from fpga \n");
 #endif    
     dma_sync_single_for_cpu(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
     not_copied = copy_to_user(buf, (void *)cbuf, count);
@@ -219,7 +220,7 @@ static long fpga_ioctl1(struct file *file, unsigned int cmd, unsigned long arg) 
    volatile unsigned char *access_addr;
 
 #ifdef DEBUG
-   printk(KERN_INFO "\nfpga_drv: Inside fpga_ioctl1 \n");
+   printk(KERN_ALERT "\nfpga_drv: Inside fpga_ioctl1 \n");
 #endif
    if (cmd >= FPGA_SIZE && cmd <= FPGA_SIZE + 2) {
       if (cmd == FPGA_SIZE) {
@@ -516,7 +517,7 @@ static int __init fpga_init_module(void)
 
 #ifdef DEBUG
    printk("FPGA Interface Module\n");
-   printk(KERN_INFO "\nfpga_drv: FPGA Driver Loading.\n");
+   printk(KERN_ALERT "\nfpga_drv: FPGA Driver Loading.\n");
 #endif
 
    // register driver with kernel
@@ -537,7 +538,7 @@ static int __init fpga_init_module(void)
    }
 #endif   
 #ifdef DEBUG
-      printk(KERN_INFO "\nfpga_drv: FINISHED.\n");
+      printk(KERN_ALERT "\nfpga_drv: FINISHED.\n");
 #endif 
    return 0;
 }
