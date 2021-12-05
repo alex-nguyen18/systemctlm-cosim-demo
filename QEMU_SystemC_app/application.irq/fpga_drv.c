@@ -41,7 +41,7 @@
                        // Can be found by (GIC IRQ is 121 for this example):
                        //   grep 121 /sys/kernel/irq/*/hwirq
 
-#define FPGA_BASE    0xa0000000
+#define FPGA_BASE    0x2000000000ULL
 #endif
 
 #define FPGA_MASK    0x00ffffff
@@ -151,10 +151,6 @@ static int fpga_open1 (struct inode *inode, struct file *file) {
 }
 
 static int fpga_release1 (struct inode *inode, struct file *file) {
-   //free_pages(abuf, FPGA_ABORDER);
-   //free_pages(bbuf, FPGA_ABORDER);
-   //free_pages(cbuf, FPGA_CORDER);
-//   struct device *dev = &fpga_dev->dev;
    dma_unmap_single(dev, dmaabuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    dma_unmap_single(dev, dmabbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
    dma_unmap_single(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
@@ -401,7 +397,7 @@ static int fpga_drv_probe (struct platform_device *pdev)
             (unsigned long)l.fpga_ptr);
    dev_info(dev, "fpga_drv: using (major, minor) number (10, %d) on %s\n", 
             fpga_miscdev.minor, DRIVER_NAME); 
-
+/*
    // create /proc file system entry
    l.fpga_interrupt_file = proc_create(DRIVER_NAME, 0444, NULL, &proc_fops);
    if(l.fpga_interrupt_file == NULL)
@@ -429,14 +425,14 @@ static int fpga_drv_probe (struct platform_device *pdev)
    }
 
    dev_info(dev, "fpga_drv: using interrupt %d\n", l.irq);
-
+*/
    // everything initialized
    dev_info(dev, "fpga_drv: %s %s Initialized\n", fpga_NAME, fpga_VERSION);
    return 0;
 
    // error handling
-no_fpga_interrupt:
-   remove_proc_entry(DRIVER_NAME, NULL);
+//no_fpga_interrupt:
+//   remove_proc_entry(DRIVER_NAME, NULL);
 no_proc:
    release_mem_region(l.mem_start, l.mem_end - l.mem_start + 1);
 no_mem:
@@ -461,7 +457,7 @@ static int fpga_drv_remove (struct platform_device *pdev)
    misc_deregister(&fpga_miscdev);
 
    // remove /proc entry
-   remove_proc_entry(DRIVER_NAME, NULL);
+//   remove_proc_entry(DRIVER_NAME, NULL);
 
    dev_info(dev, "fpga_drv: %s %s removed\n", fpga_NAME, fpga_VERSION);
 
@@ -470,7 +466,7 @@ static int fpga_drv_remove (struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct of_device_id fpga_drv_of_match[] = {
-        { .compatible = "ece382m,fpga", },
+        { .compatible = "xlnx,top-1.0", },
         { /* end of list */ },
 };
 MODULE_DEVICE_TABLE(of, fpga_drv_of_match);
@@ -528,6 +524,7 @@ static int __init fpga_init_module(void)
    if (rv) return rv;
 
 #ifdef NO_DTS
+   g
    // if we are asked to install the device, register (and hence probe) it
    if(install) {
      fpga_dev = platform_device_register_simple(DRIVER_NAME, -1, 
@@ -539,7 +536,9 @@ static int __init fpga_init_module(void)
      }
    }
 #endif   
-
+#ifdef DEBUG
+      printk(KERN_INFO "\nfpga_drv: FINISHED.\n");
+#endif 
    return 0;
 }
 

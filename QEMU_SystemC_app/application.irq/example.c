@@ -21,6 +21,7 @@
 #define FPGA_CSIZE  (4 * 1024 * 1024 * sizeof(INTYPE))
 
 int det_int = 0;
+int fd; 
 
 // signal handler for receiving events from hardware driver
 void sighandler(int signo)
@@ -43,19 +44,29 @@ void initialise(int fd) {
 }
 
 void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* B, OUTTYPE* C) {
-  //////// Open FPGA as file
-  int fd=open("/dev/fpga", O_RDWR); 
-  
+
+
   //////// Write M, N, K
   unsigned long result;
   ioctl(fd, WRITE_CMD + 4 + 0, &M);
   ioctl(fd, WRITE_CMD + 4 + 4, &N);
   ioctl(fd, WRITE_CMD + 4 + 8, &K);
 
+  if(write(fd, A, M*K*sizeof(INTYPE)) != M*K*sizeof(INTYPE)){
+	printf("did not copy A correctly!\n");
+	close(fd);
+	exit(-1);
+  }
+  if(write(fd, B, K*N*sizeof(INTYPE)) != K*N*sizeof(INTYPE)){
+	printf("did not copy B correctly!\n");
+	close(fd);
+	exit(-1);
+  }
+
   //////// Write a_ptr, b_ptr, c_ptr
-  ioctl(fd, WRITE_CMD + 4 + 12, A);
-  ioctl(fd, WRITE_CMD + 4 + 20, B);
-  ioctl(fd, WRITE_CMD + 4 + 28, C);
+ // ioctl(fd, WRITE_CMD + 4 + 12, A);
+ // ioctl(fd, WRITE_CMD + 4 + 20, B);
+ // ioctl(fd, WRITE_CMD + 4 + 28, C);
 
   //////// Init the Accel to expect START of data block transfer
   /* CCREM
@@ -134,10 +145,13 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
 	 read(fd,C+(k*FPGA_CSIZE),c_bytes);
   }
   */
-  close(fd);  
+  if(read(fd, C, M*N*sizeof(OUTTYPE)) != M*N*sizeof(OUTTYPE)){
+	printf("did not copy C correctly!\n");
+	close(fd);
+	exit(-1);
+  }  
 
 }
-
 
 int main(int argc, char * argv[]) 
 {
@@ -145,13 +159,26 @@ int main(int argc, char * argv[])
   struct sigaction action;
   int fd;
 
-  
-  int m = 2;
-  int n = 2;
-  int k = 2;
-  INTYPE A[4] = {1,2,3,4};
-  INTYPE B[4] = {5,6,7,8};
-  OUTTYPE C[4] = {0,0,0,0};
+   //////// Open FPGA as file
+  fd=open("/dev/fpga", O_RDWR); 
+
+  if (fd == -1){
+	printf("could not open /dev/fpga!!\n");
+	exit(-1);
+  } 
+
+  initialise(fd);
+
+  int m = 32;
+  int n = 32;
+  int k = 32;
+  INTYPE A[32*32] = {0};//= {1,2,3,4};
+  INTYPE B[32*32] = {0};//= {5,6,7,8};
+  OUTTYPE C[32*32] = {0};//= {0,0,0,0};
+
+  A[0] = 1;
+  B[0] = 1;
+  B[1] = 2;
 
   //Ensure proper usage
   if(argc > 2)
@@ -159,9 +186,6 @@ int main(int argc, char * argv[])
     printf("Usage: %s [val]\n",argv[0]);
     return -1;
   }
-
-
-  initialise(fd);
 
   gemm(m,n,k,A,B,C);
   //In the end, close the device driver
