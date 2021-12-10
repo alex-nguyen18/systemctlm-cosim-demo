@@ -9,8 +9,8 @@
 #include <unistd.h>
 #include <stdint.h>
 
-#define READ_CMD  (0x0 << 31)
-#define WRITE_CMD (0x1 << 31)
+#define READ_CMD  (0x0U << 31)
+#define WRITE_CMD (0x1U << 31)
 
 #define COMMAND_MASK 0x80000000
 #define SMUGGLE_ADDR 0x01000000
@@ -48,89 +48,38 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
 
   //////// Write M, N, K
   unsigned long result;
-  ioctl(fd, WRITE_CMD + 4 + 0, &M);
+  ioctl(fd, WRITE_CMD + 52 + 0, &M);
 
   printf("We have written M!!\n");
   fflush(stdout);
 
-  ioctl(fd, WRITE_CMD + 4 + 4, &N);
+  ioctl(fd, WRITE_CMD + 52 + 8, &N);
 
   printf("We have written N!!\n");
   fflush(stdout);
 
-  ioctl(fd, WRITE_CMD + 4 + 8, &K);
+  ioctl(fd, WRITE_CMD + 52 + 16, &K);
 
   printf("We have written K!!\n");
   fflush(stdout);
-  if(write(fd, A, M*K*sizeof(INTYPE)) != M*K*sizeof(INTYPE)){
-	printf("did not copy A correctly!\n");
+  int written = write(fd, A, M*K*sizeof(INTYPE));
+  if(written != M*K*sizeof(INTYPE)){
+	printf("did not copy A correctly! expected %d only %d \n", written, M*K*sizeof(INTYPE));
 	close(fd);
 	exit(-1);
   }
 
   printf("We have written to A!!\n");
   fflush(stdout);
-  if(write(fd, B, K*N*sizeof(INTYPE)) != K*N*sizeof(INTYPE)){
-	printf("did not copy B correctly!\n");
+  written = write(fd, B, K*N*sizeof(INTYPE));
+  if(written != K*N*sizeof(INTYPE)){
+	printf("did not copy B correctly! expected %d only %d \n", written, K*N*sizeof(INTYPE));
 	close(fd);
 	exit(-1);
   }
 
   printf("We have written to B!!\n");
   fflush(stdout);
-  //////// Write a_ptr, b_ptr, c_ptr
- // ioctl(fd, WRITE_CMD + 4 + 12, A);
- // ioctl(fd, WRITE_CMD + 4 + 20, B);
- // ioctl(fd, WRITE_CMD + 4 + 28, C);
-
-  //////// Init the Accel to expect START of data block transfer
-  /* CCREM
-  int start = 1;
-  ioctl(fd, WRITE_CMD + 40, &start);
-  // Wait for init to finish
-  result = 0;
-  do {
-    ioctl(fd, READ_CMD + 40, &result); // check if finished
-  } while (result == 0);
-  printf("\nAccelerator initilized!\n"); */
-
-  //////// Write A, B
-  /* CCREM
-  int total_bytes_array=M>N?M*K*2:K*N*2;         // Larger of A,B will determine number of writes
-  int total_blocks=(total_bytes_array+(FPGA_ABSIZE-1))/FPGA_ABSIZE;  // Number of block writes
-  int bytes_copied_a=0;                            // Tracking total bytes written
-  int bytes_copied_b=0;
-  int read_val=3;                                  // Tell accel what to read
-  int a_bytes, b_bytes;
-  for (int k=0; k<total_blocks; k++) {
-    // Write A, B
-    //a_bytes = min(FPGA_ABSIZE, M*K*2-bytes_copied_a);
-    //b_bytes = min(FPGA_ABSIZE, K*N*2-bytes_copied_b);
-    a_bytes = FPGA_ABSIZE<(M*K*2-bytes_copied_a)?FPGA_ABSIZE:(M*K*2-bytes_copied_a);
-	 b_bytes = FPGA_ABSIZE<(M*N*2-bytes_copied_b)?FPGA_ABSIZE:(M*N*2-bytes_copied_b);
-	 write(fd, A+(k*FPGA_ABSIZE), a_bytes);
-    write(fd, B+(k*FPGA_ABSIZE), b_bytes);
-    // Notify Accel to Read A or B
-    // Write 1 -- read A
-    // Write 2 -- read B
-    // Write 3 -- read A,B
-    read_val = 3;
-    if (a_bytes == 0 && b_bytes != 0) {
-      read_val = 2;
-    }
-    if (b_bytes == 0 && a_bytes != 0) {
-      read_val = 1;
-    }
-    ioctl(fd, WRITE_CMD + 44, &read_val); // start 
-    // Wait for accel finished notification
-    do {
-      ioctl(fd, READ_CMD + 44, &result); // check if finished
-    } while (result == 0);
-    bytes_copied_a += a_bytes;
-    bytes_copied_b += b_bytes;
-  }
-  printf("\tIn %d blocks:\n\t\tWrote %d bytes in A\n\t\tWrote %d bytes in B\n", total_blocks, bytes_copied_a, bytes_copied_b);
-  */ 
 
   //////// Tell GEMM to Run and Wait for Finish
   result = 1;
@@ -146,27 +95,7 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
   
   printf("We have finihsed!\n");
   fflush(stdout);
-  //////// Read Result from DRAM block by block
-  /* CCREM
-  total_bytes_array=M*N*4;
-  //total_blocks=total_bytes_array/FPGA_CSIZE;
-  total_blocks=(total_bytes_array+(FPGA_CSIZE-1))/FPGA_CSIZE;  // Number of block writes  
-  int bytes_copied_c=0;
-  int c_bytes;
-  result = 1;
-  for (int k=0; k<total_blocks; k++) {
-    c_bytes = FPGA_CSIZE<(M*N*4-bytes_copied_c)?FPGA_CSIZE:(M*N*4-bytes_copied_c);
-	 // Request a Block
-    ioctl(fd, WRITE_CMD + 48, &result);
-	 // Wait for response
-	 result = 0;
-    do {
-      ioctl(fd, READ_CMD + 48, &result); // check if finished
-    } while (result == 0);
-	 // Read
-	 read(fd,C+(k*FPGA_CSIZE),c_bytes);
-  }
-  */
+
   if(read(fd, C, M*N*sizeof(OUTTYPE)) != M*N*sizeof(OUTTYPE)){
 	printf("did not copy C correctly!\n");
 	close(fd);
@@ -180,6 +109,7 @@ void gemm(unsigned long M, unsigned long N, unsigned long K, INTYPE* A, INTYPE* 
 int main(int argc, char * argv[]) 
 {
   unsigned long val, result;
+  unsigned long volatile gie, iie;
   struct sigaction action;
 
   printf("We gonna open fpga!!\n");
@@ -187,17 +117,41 @@ int main(int argc, char * argv[])
 
    //////// Open FPGA as file
   fd=open("/dev/fpga", O_RDWR); 
+  if(fd < 0)
+  {
 
+      printf("Unable to open /dev/fpga.  Ensure it exists!\n");
+      return -1;
+  }
+  fcntl(fd, F_SETOWN, getpid());
+  fcntl(fd, F_SETFL, fcntl(fd, F_GETFL)|O_ASYNC);
 
   if (fd == -1){
 	printf("could not open /dev/fpga!!\n");
 	exit(-1);
   } 
 
+  // install signal handler
+  sigemptyset(&action.sa_mask);
+  sigaddset(&action.sa_mask, SIGIO);
+
+  action.sa_handler = sighandler;
+  action.sa_flags=0;
+
+  sigaction(SIGIO, &action, NULL);
+
   printf("We have opened /dev/fpga!!\n");
   fflush(stdout);
 
   initialise(fd);
+
+  // enable FPGA interrupts (global and IP)
+  ioctl(fd, READ_CMD + 0x4, &gie);
+  gie = gie | 0x00000001;
+  ioctl(fd, WRITE_CMD + 0x4, &gie);
+
+  iie = 0x1;
+  ioctl(fd, WRITE_CMD + 0x8, &iie);
 
   int m = 32;
   int n = 32;

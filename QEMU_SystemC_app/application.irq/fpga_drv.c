@@ -27,6 +27,7 @@
 #include <linux/of_platform.h>
 
 #include <linux/dma-mapping.h>
+#include <linux/slab.h>
 
 #ifndef CONFIG_OF  // If no device-tree support in kernel, turn it off here
 #define NO_DTS
@@ -41,11 +42,11 @@
                        // Can be found by (GIC IRQ is 121 for this example):
                        //   grep 121 /sys/kernel/irq/*/hwirq
 
-#define FPGA_BASE    0x2000000000ULL
+#define FPGA_BASE    0x43c00000    // Base address of the HW accelerator
 #endif
 
-#define FPGA_MASK    0x00ffffff
-#define FPGA_SIZE    0x01000000
+#define FPGA_MASK    0x000fffff
+#define FPGA_SIZE    0x00100000
 
 #define COMMAND_MASK 0x80000000
 
@@ -64,17 +65,23 @@ module_param(install, int, S_IRUGO);
 /* count of received interrupts */
 int interruptcount = 0;
 
-static struct platform_device *fpga_dev = NULL;
 static struct device* dev = NULL;
 
-#define FPGA_ABSIZE (2 * 1024 * 1024 * sizeof(short))
+#define INTYPE uint16_t
+#define OUTTYPE uint32_t
+//#define FPGA_ABSIZE (2 * 1024 * 1024 * sizeof(short))
+#define FPGA_ABSIZE (32 * 32 * sizeof(short))
 #define FPGA_ABORDER (23)
-#define FPGA_CSIZE  (1 * 1024 * 1024 * sizeof(int))
-#define FPGA_CORDER (22)
+//#define FPGA_CSIZE  (1 * 1024 * 1024 * sizeof(int))
+#define FPGA_CSIZE  (32 * 32 * sizeof(int))
+//#define FPGA_CORDER (22)
 bool isa = true;
-unsigned long abuf = 0;
-unsigned long bbuf = 0;
-unsigned long cbuf = 0;
+//INTYPE abuf[FPGA_ABSIZE];
+//INTYPE bbuf[FPGA_ABSIZE];
+//OUTTYPE cbuf[FPGA_CSIZE];
+static unsigned long abuf = 0;
+static unsigned long bbuf = 0;
+static unsigned long cbuf = 0;
 dma_addr_t dmaabuf;
 dma_addr_t dmabbuf;
 dma_addr_t dmacbuf;
@@ -106,8 +113,8 @@ static irqreturn_t fpga_int_handler(int irq, void *lp)
    printk(KERN_ALERT "\nfpga_drv: Interrupt detected in kernel \n");
 #endif
 
-   /* acknowledge/reset the interrupt */
-   writel(0ul, (volatile unsigned int *)&l.fpga_ptr[3]);
+   /* acknowledge/reset the interrupt by clearing the interrup status register */
+   writel(1ul, (volatile unsigned int *)&l.fpga_ptr[12]);
 
    /* Signal the user application that an interupt occured */
    kill_fasync(&((struct fpga_drv_local*)lp)->fasync_fpga_queue, SIGIO, POLL_IN);
@@ -122,39 +129,56 @@ static irqreturn_t fpga_int_handler(int irq, void *lp)
 
 /* Driver access routines */
 static int fpga_open1 (struct inode *inode, struct file *file) {
-   //abuf = __get_free_pages(GFP_KERNEL, FPGA_ABORDER);
-   //bbuf = __get_free_pages(GFP_KERNEL, FPGA_ABORDER); // lol error handlign
-   //cbuf = __get_free_pages(GFP_KERNEL, FPGA_CORDER);
-//   struct device *dev = &fpga_dev->dev; 
+
+   dma_set_mask(dev,dma_get_required_mask(dev));
+
+   printk(KERN_ALERT "required mask %llx\n", dma_get_required_mask(dev));
 
    abuf = kmalloc(FPGA_ABSIZE,GFP_DMA);  
    bbuf = kmalloc(FPGA_ABSIZE,GFP_DMA);
    cbuf = kmalloc(FPGA_CSIZE,GFP_DMA);
-	printk(KERN_ALERT "allocated\n");
+   if( (abuf == 0) | (bbuf == 0) | (cbuf == 0)){	
+   #ifdef DEBUG
+	printk(KERN_ALERT "dma allocation failed! abuf %lx bbuf %lx cbuf %lx\n", dmaabuf, dmabbuf, dmacbuf);
+   #endif
+   }
    
-   dmaabuf = dma_map_single(dev, abuf, FPGA_ABSIZE, DMA_TO_DEVICE);
+   printk(KERN_ALERT "allocated\n");
+   
+   dmaabuf = dma_map_single_attrs(dev, abuf, FPGA_ABSIZE, DMA_TO_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
    if(dma_mapping_error(dev,dmaabuf))
 	printk(KERN_ALERT "dmaabuf broke\n");
-   dmabbuf = dma_map_single(dev, bbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
+   dmabbuf = dma_map_single_attrs(dev, bbuf, FPGA_ABSIZE, DMA_TO_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
    
-   dmacbuf = dma_map_single(dev, cbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
+   dmacbuf = dma_map_single_attrs(dev, cbuf, FPGA_CSIZE, DMA_FROM_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
    
    #ifdef DEBUG
 	printk(KERN_ALERT " dma abuf %lx bbuf %lx cbuf %lx\n", dmaabuf, dmabbuf, dmacbuf);
 	printk(KERN_ALERT " abuf %lx bbuf %lx cbuf %lx fpga_ptr %lx\n", abuf, bbuf, cbuf, l.fpga_ptr); 
    #endif
 
-   writel(dmaabuf,l.fpga_ptr+16+0);
-   writel(dmabbuf,l.fpga_ptr+16+8);
-   writel(dmacbuf,l.fpga_ptr+16+16);
-	printk(KERN_ALERT "set addresses\n");
+   writel(dmaabuf & 0xFFFFFFFFULL,l.fpga_ptr+16+0);
+   writel(dmaabuf>>32,l.fpga_ptr+16+4);
+
+   writel(dmabbuf & 0xFFFFFFFFULL,l.fpga_ptr+16+12);
+   writel(dmabbuf>>32,l.fpga_ptr+16+12+4);
+
+   writel(dmacbuf & 0xFFFFFFFFULL,l.fpga_ptr+16+24);
+   writel(dmacbuf>>32,l.fpga_ptr+16+24+4);
+
+   printk(KERN_ALERT "set addresses\n");
+
+#ifdef DEBUG
+         printk("open1 Wrote value %x to addr %lx\n", (unsigned)(dmaabuf & 0xFFFFFFFFULL), l.fpga_ptr+16+0);
+         printk("open2 Wrote value %x to addr %lx\n", (unsigned)(dmaabuf >> 32), l.fpga_ptr+16+4);
+#endif
    return 0;
 }
 
 static int fpga_release1 (struct inode *inode, struct file *file) {
-   dma_unmap_single(dev, dmaabuf, FPGA_ABSIZE, DMA_TO_DEVICE);
-   dma_unmap_single(dev, dmabbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
-   dma_unmap_single(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
+   dma_unmap_single_attrs(dev, dmaabuf, FPGA_ABSIZE, DMA_TO_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
+   dma_unmap_single_attrs(dev, dmabbuf, FPGA_ABSIZE, DMA_TO_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
+   dma_unmap_single_attrs(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
    kfree(abuf);
    kfree(bbuf);
    kfree(cbuf);
@@ -173,11 +197,10 @@ static int fpga_fasync1 (int fd, struct file *filp, int on)
 static ssize_t fpga_write1(struct file *filp, const char __user *buf, size_t count, loff_t *offp)
 {
     int not_copied;
- //   struct device *dev = &fpga_dev->dev;
 
 #ifdef DEBUG
     printk(KERN_ALERT "\nfpga_drv: receive write command to fpga \n");
-#endif    
+#endif        
    if (isa) {
      dma_sync_single_for_cpu(dev, dmaabuf, FPGA_ABSIZE, DMA_TO_DEVICE);
      not_copied = copy_from_user((void *)abuf, buf, count);
@@ -189,26 +212,29 @@ static ssize_t fpga_write1(struct file *filp, const char __user *buf, size_t cou
    }
    isa = !isa;
 
-    //not_copied = copy_from_user((void *)l.fpga_ptr, buf, count);
+ //   not_copied = copy_from_user((void *)l.fpga_ptr, buf, count);
 
     return count - not_copied;
 
+    //return 0;
 }
 
 static ssize_t fpga_read1(struct file *filp, char __user *buf, size_t count, loff_t *offp)
 {
     int not_copied;
-//    struct device *dev = &fpga_dev->dev;
 
 #ifdef DEBUG
     printk(KERN_ALERT "\nfpga_drv: receive read command from fpga \n");
 #endif    
+   
     dma_sync_single_for_cpu(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
     not_copied = copy_to_user(buf, (void *)cbuf, count);
     dma_sync_single_for_device(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
-    //not_copied  = copy_to_user(buf, (void *)l.fpga_ptr, count);
+
+//    not_copied  = copy_to_user(buf, (void *)l.fpga_ptr, count);
 
     return count - not_copied;
+      //return 0;
 }
 
 static long fpga_ioctl1(struct file *file, unsigned int cmd, unsigned long arg) {
@@ -222,6 +248,7 @@ static long fpga_ioctl1(struct file *file, unsigned int cmd, unsigned long arg) 
 #ifdef DEBUG
    printk(KERN_ALERT "\nfpga_drv: Inside fpga_ioctl1 \n");
 #endif
+
    if (cmd >= FPGA_SIZE && cmd <= FPGA_SIZE + 2) {
       if (cmd == FPGA_SIZE) {
          return dmaabuf;
@@ -263,10 +290,10 @@ static long fpga_ioctl1(struct file *file, unsigned int cmd, unsigned long arg) 
             return -EFAULT;
 
          get_user(value, (unsigned long *)arg);
-         writel(value, access_addr); 
+         writel(value, (volatile unsigned int *)access_addr); 
 
 #ifdef DEBUG
-         printk("fpga_drv: Wrote value %08lx\n", value);
+         printk("fpga_drv: Wrote value %08lx to addr %lx\n", value, access_addr);
 #endif
          break;
 
@@ -282,7 +309,7 @@ static long fpga_ioctl1(struct file *file, unsigned int cmd, unsigned long arg) 
 
 /* define which file operations are supported by the driver */
 struct file_operations fpga_fops = {
-   .owner=   THIS_MODULE,
+   .owner   = THIS_MODULE,
    .llseek  = NULL,
    .read    = fpga_read1,
    .write   = fpga_write1,
@@ -344,6 +371,7 @@ static struct miscdevice fpga_miscdev = {
         .minor =        MISC_DYNAMIC_MINOR,
         .name =         DRIVER_NAME,
         .fops =         &fpga_fops,
+        .mode =	        S_IRUGO | S_IWUGO,
 };
 
 
@@ -352,9 +380,7 @@ static int fpga_drv_probe (struct platform_device *pdev)
 {
   struct resource *r_irq; /* Interrupt resources */
   struct resource *r_mem; /* IO mem resources */
-  //struct device *dev = &pdev->dev;
   dev = &pdev->dev;
-
 
    int rv = -EBUSY;
 
@@ -385,7 +411,7 @@ static int fpga_drv_probe (struct platform_device *pdev)
       goto no_mem;
    }
 
-   l.fpga_ptr = (volatile unsigned char *)ioremap(l.mem_start, 
+   l.fpga_ptr = (volatile unsigned char *)ioremap_nocache(l.mem_start, 
                                                  l.mem_end - l.mem_start + 1);
    if (!l.fpga_ptr)
    {
@@ -398,7 +424,7 @@ static int fpga_drv_probe (struct platform_device *pdev)
             (unsigned long)l.fpga_ptr);
    dev_info(dev, "fpga_drv: using (major, minor) number (10, %d) on %s\n", 
             fpga_miscdev.minor, DRIVER_NAME); 
-/*
+
    // create /proc file system entry
    l.fpga_interrupt_file = proc_create(DRIVER_NAME, 0444, NULL, &proc_fops);
    if(l.fpga_interrupt_file == NULL)
@@ -426,14 +452,14 @@ static int fpga_drv_probe (struct platform_device *pdev)
    }
 
    dev_info(dev, "fpga_drv: using interrupt %d\n", l.irq);
-*/
+
    // everything initialized
    dev_info(dev, "fpga_drv: %s %s Initialized\n", fpga_NAME, fpga_VERSION);
    return 0;
 
    // error handling
-//no_fpga_interrupt:
-//   remove_proc_entry(DRIVER_NAME, NULL);
+no_fpga_interrupt:
+   remove_proc_entry(DRIVER_NAME, NULL);
 no_proc:
    release_mem_region(l.mem_start, l.mem_end - l.mem_start + 1);
 no_mem:
@@ -458,7 +484,7 @@ static int fpga_drv_remove (struct platform_device *pdev)
    misc_deregister(&fpga_miscdev);
 
    // remove /proc entry
-//   remove_proc_entry(DRIVER_NAME, NULL);
+   remove_proc_entry(DRIVER_NAME, NULL);
 
    dev_info(dev, "fpga_drv: %s %s removed\n", fpga_NAME, fpga_VERSION);
 
@@ -467,8 +493,8 @@ static int fpga_drv_remove (struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct of_device_id fpga_drv_of_match[] = {
-        { .compatible = "xlnx,top-1.0", },
-        { /* end of list */ },
+        { .compatible = "xlnx,top-1.0",},
+	{ /* end of list */ },
 };
 MODULE_DEVICE_TABLE(of, fpga_drv_of_match);
 #else
@@ -476,6 +502,7 @@ MODULE_DEVICE_TABLE(of, fpga_drv_of_match);
 #endif
 
 
+static struct platform_device *fpga_dev = NULL;
 
 /* Kernel driver data structure */
 static struct platform_driver fpga_driver = {
@@ -525,7 +552,6 @@ static int __init fpga_init_module(void)
    if (rv) return rv;
 
 #ifdef NO_DTS
-   g
    // if we are asked to install the device, register (and hence probe) it
    if(install) {
      fpga_dev = platform_device_register_simple(DRIVER_NAME, -1, 
@@ -537,9 +563,7 @@ static int __init fpga_init_module(void)
      }
    }
 #endif   
-#ifdef DEBUG
-      printk(KERN_ALERT "\nfpga_drv: FINISHED.\n");
-#endif 
+
    return 0;
 }
 
@@ -555,4 +579,3 @@ static void __exit fpga_cleanup_module(void)
 
 module_init(fpga_init_module);
 module_exit(fpga_cleanup_module);
-
