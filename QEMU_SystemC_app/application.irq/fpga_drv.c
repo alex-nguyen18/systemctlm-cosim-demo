@@ -69,11 +69,11 @@ static struct device* dev = NULL;
 
 #define INTYPE uint16_t
 #define OUTTYPE uint32_t
-//#define FPGA_ABSIZE (2 * 1024 * 1024 * sizeof(short))
-#define FPGA_ABSIZE (32 * 32 * sizeof(short))
+#define FPGA_ABSIZE (2 * 1024 * 1024 * sizeof(short))
+//#define FPGA_ABSIZE (32 * 32 * sizeof(short))
 #define FPGA_ABORDER (23)
-//#define FPGA_CSIZE  (1 * 1024 * 1024 * sizeof(int))
-#define FPGA_CSIZE  (32 * 32 * sizeof(int))
+#define FPGA_CSIZE  (1 * 1024 * 1024 * sizeof(int))
+//#define FPGA_CSIZE  (32 * 32 * sizeof(int))
 //#define FPGA_CORDER (22)
 bool isa = true;
 //INTYPE abuf[FPGA_ABSIZE];
@@ -137,6 +137,7 @@ static int fpga_open1 (struct inode *inode, struct file *file) {
    abuf = kmalloc(FPGA_ABSIZE,GFP_DMA);  
    bbuf = kmalloc(FPGA_ABSIZE,GFP_DMA);
    cbuf = kmalloc(FPGA_CSIZE,GFP_DMA);
+   memset(cbuf,'5',FPGA_CSIZE);
    if( (abuf == 0) | (bbuf == 0) | (cbuf == 0)){	
    #ifdef DEBUG
 	printk(KERN_ALERT "dma allocation failed! abuf %lx bbuf %lx cbuf %lx\n", dmaabuf, dmabbuf, dmacbuf);
@@ -157,16 +158,33 @@ static int fpga_open1 (struct inode *inode, struct file *file) {
 	printk(KERN_ALERT " abuf %lx bbuf %lx cbuf %lx fpga_ptr %lx\n", abuf, bbuf, cbuf, l.fpga_ptr); 
    #endif
 
-   writel(dmaabuf & 0xFFFFFFFFULL,l.fpga_ptr+16+0);
-   writel(dmaabuf>>32,l.fpga_ptr+16+4);
+//   writel(dmaabuf & 0xFFFFFFFFULL,l.fpga_ptr+16+0);
+//   writel(dmaabuf>>32,l.fpga_ptr+16+4);
 
-   writel(dmabbuf & 0xFFFFFFFFULL,l.fpga_ptr+16+12);
-   writel(dmabbuf>>32,l.fpga_ptr+16+12+4);
+//   writel(dmabbuf & 0xFFFFFFFFULL,l.fpga_ptr+16+12);
+//   writel(dmabbuf>>32,l.fpga_ptr+16+12+4);
 
-   writel(dmacbuf & 0xFFFFFFFFULL,l.fpga_ptr+16+24);
-   writel(dmacbuf>>32,l.fpga_ptr+16+24+4);
+//   writel(dmacbuf & 0xFFFFFFFFULL,l.fpga_ptr+16+24);
+//   writel(dmacbuf>>32,l.fpga_ptr+16+24+4);
+
+   writel(dmaabuf,l.fpga_ptr+0x28);
+//   writel(dmaabuf>>32,l.fpga_ptr+16+4);
+
+   writel(dmabbuf,l.fpga_ptr+0x30);
+//   writel(dmabbuf>>32,l.fpga_ptr+16+12+4);
+
+   writel(dmacbuf,l.fpga_ptr+0x38);
+//   writel(dmacbuf>>32,l.fpga_ptr+16+24+4);
+
 
    printk(KERN_ALERT "set addresses\n");
+
+//   readl((volatile unsigned int *)&l.fpga_ptr[0x4c]);
+//   printk(KERN_ALERT "version %x\n",readl((volatile unsigned int *)&l.fpga_ptr[0x4c]));
+
+   dma_sync_single_for_device(dev, dmaabuf, FPGA_ABSIZE, DMA_TO_DEVICE);
+   dma_sync_single_for_device(dev, dmabbuf, FPGA_ABSIZE, DMA_TO_DEVICE);
+   dma_sync_single_for_device(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
 
 #ifdef DEBUG
          printk("open1 Wrote value %x to addr %lx\n", (unsigned)(dmaabuf & 0xFFFFFFFFULL), l.fpga_ptr+16+0);
@@ -179,9 +197,10 @@ static int fpga_release1 (struct inode *inode, struct file *file) {
    dma_unmap_single_attrs(dev, dmaabuf, FPGA_ABSIZE, DMA_TO_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
    dma_unmap_single_attrs(dev, dmabbuf, FPGA_ABSIZE, DMA_TO_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
    dma_unmap_single_attrs(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE,DMA_ATTR_FORCE_CONTIGUOUS);
-   kfree(abuf);
-   kfree(bbuf);
+
    kfree(cbuf);
+   kfree(bbuf);
+   kfree(abuf);
    return 0;
 }
 
@@ -224,7 +243,9 @@ static ssize_t fpga_read1(struct file *filp, char __user *buf, size_t count, lof
     int not_copied;
 
 #ifdef DEBUG
-    printk(KERN_ALERT "\nfpga_drv: receive read command from fpga \n");
+    printk(KERN_ALERT "buf value %x %x \n",((volatile unsigned int*)abuf)[0], ((volatile unsigned int*)bbuf)[0]); 
+    printk(KERN_ALERT "cbuf value %x %x \n",((volatile unsigned int*)cbuf)[0], ((volatile unsigned int*)cbuf)[1]);
+    printk(KERN_ALERT "fpga_drv: receive read command from fpga \n");
 #endif    
    
     dma_sync_single_for_cpu(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
@@ -232,7 +253,7 @@ static ssize_t fpga_read1(struct file *filp, char __user *buf, size_t count, lof
     dma_sync_single_for_device(dev, dmacbuf, FPGA_CSIZE, DMA_FROM_DEVICE);
 
 //    not_copied  = copy_to_user(buf, (void *)l.fpga_ptr, count);
-
+   memset(cbuf,'4',FPGA_CSIZE);
     return count - not_copied;
       //return 0;
 }
@@ -493,7 +514,8 @@ static int fpga_drv_remove (struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct of_device_id fpga_drv_of_match[] = {
-        { .compatible = "xlnx,top-1.0",},
+//        { .compatible = "xlnx,top-1.0",},
+        { .compatible = "xlnx,gemm-1.0",},
 	{ /* end of list */ },
 };
 MODULE_DEVICE_TABLE(of, fpga_drv_of_match);
